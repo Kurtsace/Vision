@@ -1,3 +1,28 @@
+/* Change Log
+ *
+
+Changes 1.2
+
+    Added a min radius and min area
+    Bounding boxes and circles wont draw anything that's less than min radius and area
+    Color improvements to bounding boxes and contours
+    No longer using Canny for edge detection, but function is still working and available for use
+    General optimization and organization
+
+Changes 1.1
+
+    Added Canny operators for edge detection
+    Canny uses Thresholded image for edge detection
+    Optimized Gaussian blur kernels along with the X & Y sigma
+    Added better noise reduction for Canny edge detection
+
+Changes 1.0
+
+    Added more control features to track bar
+    Optimized Morphological operators for Thresholding
+    Added a Gaussian blur
+    General optimization
+ */
 
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
@@ -8,6 +33,7 @@ using namespace std;
 
 //Globals
 Mat srcGray, dst, detectedEdges, imgOriginal, imgThresholded;
+vector<vector<Point>> contours;
 
 //Variables that contain values for the control window
 struct ControlElements{
@@ -43,7 +69,7 @@ struct ControlElements{
     int shapes = 0;
 
     //Canny thresholds
-    int edgeThresh = 0;
+    int edgeThresh = 1;
     int lowThresh;
     int const max_lowThresh = 100;
     int ratio = 3;
@@ -51,8 +77,8 @@ struct ControlElements{
     int kSizeY = 1;
 
     //Object detection
-    int minSize = 0; //Minimum size to draw
-    int minRadius = 0;
+    int minSize = 0; //Minimum size of rect to draw (Area)
+    int minRadius = 0; //Minimum radius to draw
 
 };
 
@@ -61,7 +87,9 @@ ControlElements e;
 
 //Uncomment if you want to use canny
 //void cannyThresh(int, void*); //Canny thresholding function
+
 void createControl();//Creates the control window
+void drawBounding(); //Draws bounding boxes and circles for contours
 
 int main(int argc, char* argv[])
 {
@@ -75,8 +103,6 @@ int main(int argc, char* argv[])
 
     //Creates all the control windows and track bars
     createControl();
-
-    vector<vector<Point>> contours;
 
     while (1)
     {
@@ -94,37 +120,26 @@ int main(int argc, char* argv[])
 
         cvtColor(imgOriginal, imgHSV, COLOR_BGR2HSV); //Convert the captured frame from BGR to HSV
 
+        //Apply a blur to HSV
         blur(imgHSV, imgHSV, Size(3, 3));
+
+        //Erode HSV image with 2 passes
+        //erode(imgHSV, imgHSV, getStructuringElement(MORPH_CROSS, Size(3, 3)), Point(-1, -1), 2);
 
         //Threshold the image
         inRange(imgHSV, Scalar(e.iLowH, e.iLowS, e.iLowV), Scalar(e.iHighH, e.iHighS, e.iHighV), imgThresholded);
 
-        //Size of the Morphological Shape
-        int x = e.sizeX;
-        int y = e.sizeY;
-
-        //Size of Gaussian Blur
-        int kernelX = e.kX;
-        int kernelY = e.kY;
-
-        //Sigma of the Gaussian blur
-        int sigmaX = e.sX;
-        int sigmaY = e.sY;
-
-        //How many passes of opening and closing Erosion/Dilation
-        int passes = e.passVal;
-
         //Kernel cannot be an even value
-        if( kernelX % 2 == 0 && kernelX <= e.kMax)
-            kernelX++;
-        if( kernelY % 2 == 0 && kernelY <= e.kMax)
-            kernelY++;
+        if( e.kX % 2 == 0 && e.kX <= e.kMax)
+            e.kX++;
+        if( e.kY % 2 == 0 && e.kY <= e.kMax)
+            e.kY++;
 
         //Size of the shape cannot be 0
-        if(x <= 0)
-            x = 1;
-        if(y <= 0)
-            y = 1;
+        if(e.sizeX <= 0)
+            e.sizeX = 1;
+        if(e.sizeY <= 0)
+            e.sizeY = 1;
 
         //Change shapes
         MorphShapes shape;
@@ -135,18 +150,19 @@ int main(int argc, char* argv[])
         else
             shape = MORPH_ELLIPSE;
 
+        //Clone imgThresholded into threshClone
         Mat threshClone = imgThresholded.clone();
 
         //Apply a Gaussian Blur to Thresholded image
-        GaussianBlur(imgThresholded, imgThresholded, Size(kernelX, kernelY), sigmaX, sigmaY);
+        GaussianBlur(imgThresholded, imgThresholded, Size(e.kX, e.kY), e.sX, e.sY);
 
         //morphological opening (remove small objects from the foreground)
-        erode(imgThresholded, imgThresholded, getStructuringElement(shape, Size(x, y)), Point(-1, -1) , passes);
-        dilate( imgThresholded, imgThresholded, getStructuringElement(shape, Size(x, y)), Point(-1, -1), passes);
+        erode(imgThresholded, imgThresholded, getStructuringElement(shape, Size(e.sizeX, e.sizeY)), Point(-1, -1) , e.passVal);
+        dilate( imgThresholded, imgThresholded, getStructuringElement(shape, Size(e.sizeX, e.sizeY)), Point(-1, -1), e.passVal);
 
         //morphological closing (fill small holes in the foreground)
-        dilate( imgThresholded, imgThresholded, getStructuringElement(shape, Size(x, y)), Point(-1, -1), passes);
-        erode(imgThresholded, imgThresholded, getStructuringElement(shape, Size(x, y)), Point(-1, -1), passes);
+        dilate( imgThresholded, imgThresholded, getStructuringElement(shape, Size(e.sizeX, e.sizeY)), Point(-1, -1), e.passVal);
+        erode(imgThresholded, imgThresholded, getStructuringElement(shape, Size(e.sizeX, e.sizeY)), Point(-1, -1), e.passVal);
 
         //Create a matrix of the same size and type as imgOriginal
         dst.create(imgOriginal.size(), imgOriginal.type());
@@ -157,46 +173,13 @@ int main(int argc, char* argv[])
         //cannyThresh(0,0);
 
         //Find contours
-        findContours(threshClone, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
+        findContours(threshClone, contours, RETR_CCOMP, CHAIN_APPROX_SIMPLE);
 
         //Draw contours
-        double area, length;
         drawContours(imgOriginal, contours, -1, Scalar(0, 255, 0), 2);
 
         //Draw a bounding box on contours
-        for(int i = 0; i < contours.size(); ++i)
-        {
-            Point2f points[4];
-            Point2f center;
-            float radius;
-            Rect rect;
-            RotatedRect rotate_rect;
-
-            //compute the bounding rect, rotated bounding rect, minum enclosing circle.
-            rect = boundingRect(contours[i]);
-            rotate_rect = minAreaRect(contours[i]);
-            minEnclosingCircle(contours[i], center, radius);
-
-            rotate_rect.points(points);
-
-            vector< vector< Point> > polylines;
-            polylines.resize(1);
-            for(int j = 0; j < 4; ++j)
-                polylines[0].push_back(points[j]);
-
-            //draw them on the bounding image.
-
-            if(rect.area() >= e.minSize){
-
-                //cv::rectangle(imgOriginal, rect, Scalar(0,255,255), 2);
-                cv::polylines(imgOriginal, polylines, true, Scalar(255, 0, 0), 2);
-            }
-
-            if(radius >= e.minRadius){
-
-                circle(imgOriginal, center, radius, Scalar(0, 0, 255), 2);
-            }
-        }
+        drawBounding();
 
         //Show the capture stream
         imshow("Thresholded Image", imgThresholded); //Show the thresholded image
@@ -263,6 +246,44 @@ void createControl(){
     cvCreateTrackbar("Min Size", "Object Detection", &e.minSize, 300000);
     cvCreateTrackbar("Min Radius", "Object Detection", &e.minRadius, 400);
 }
+
+void drawBounding(){
+
+    for(int i = 0; i < contours.size(); ++i)
+    {
+        Point2f points[4];
+        Point2f center;
+        float radius;
+        Rect rect;
+        RotatedRect rotate_rect;
+
+        //compute the bounding rect, rotated bounding rect, minum enclosing circle.
+        rect = boundingRect(contours[i]);
+        rotate_rect = minAreaRect(contours[i]);
+        minEnclosingCircle(contours[i], center, radius);
+
+        rotate_rect.points(points);
+
+        vector< vector< Point> > polylines;
+        polylines.resize(1);
+        for(int j = 0; j < 4; ++j)
+            polylines[0].push_back(points[j]);
+
+        //draw them on the bounding image.
+
+        if(rect.area() >= e.minSize){
+
+            //cv::rectangle(imgOriginal, rect, Scalar(0,255,255), 2);
+            cv::polylines(imgOriginal, polylines, true, Scalar(255, 0, 0), 2);
+        }
+
+        if(radius >= e.minRadius){
+
+            circle(imgOriginal, center, radius, Scalar(0, 0, 255), 2);
+        }
+    }
+}
+
 void cannyThresh(int, void*){
 
     //Error checking --Kernel sizes cannot be 0
