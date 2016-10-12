@@ -64,6 +64,17 @@ struct ControlElements{
 
 };
 
+//Color structure
+struct Color{
+
+    Scalar RED = Scalar(0, 0, 255);
+    Scalar GREEN = Scalar(0, 255, 0);
+    Scalar BLUE = Scalar(255, 0 ,0);
+    Scalar WHITE = Scalar(255, 255, 255);
+    Scalar Yellow = Scalar(255, 255, 0);
+
+};
+
 //createControl() uses ControlElements structure, initialize e before createControl()
 ControlElements e;
 
@@ -184,7 +195,7 @@ void createControl(){
     cvCreateTrackbar("HighH", "Control", &e.iHighH, 179);
 
     cvCreateTrackbar("LowS", "Control", &e.iLowS, 255); //Saturation (0 - 255)
-    cvCreateTrackbar("HighS", "Control", &e.iHighH, 255);
+    cvCreateTrackbar("HighS", "Control", &e.iHighS, 255);
 
     cvCreateTrackbar("LowV", "Control", &e.iLowV, 255); //Value (0-255)
     cvCreateTrackbar("HighV", "Control", &e.iHighV, 255);
@@ -205,11 +216,11 @@ void createControl(){
     cvCreateTrackbar("Passes", "Control", &e.passVal, 10);
 
     //Canny Window
-    namedWindow("Edge Controller", CV_WINDOW_AUTOSIZE);
+    //namedWindow("Edge Controller", CV_WINDOW_AUTOSIZE);
 
     //Canny Track bars
     //Threshold
-    cvCreateTrackbar("Low Thresh", "Edge Controller", &e.lowThresh, e.max_lowThresh);
+    //cvCreateTrackbar("Low Thresh", "Edge Controller", &e.lowThresh, e.max_lowThresh);
 
     //Blur
     cvCreateTrackbar("Kernel X", "Edge Controller", &e.kSizeX, 100);
@@ -219,7 +230,7 @@ void createControl(){
     namedWindow("Object Detection", CV_WINDOW_AUTOSIZE);
 
     //Minimum size
-    cvCreateTrackbar("Min Size", "Object Detection", &e.minSize, 300000);
+    cvCreateTrackbar("Min Size", "Object Detection", &e.minSize, 10000);
     cvCreateTrackbar("Min Radius", "Object Detection", &e.minRadius, 400);
 }
 
