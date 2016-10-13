@@ -204,10 +204,6 @@ void createControl(){
     // Number of passes for Morphological Operators, Opening and Closing
     cvCreateTrackbar("Passes", "Control", &e.passVal, 10);
 
-    //Blur
-    cvCreateTrackbar("Kernel X", "Edge Controller", &e.kSizeX, 100);
-    cvCreateTrackbar("Kernel Y", "Edge Controller", &e.kSizeY, 100);
-
 }
 
 void drawLargest(){
