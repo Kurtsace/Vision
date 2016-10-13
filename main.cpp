@@ -2,7 +2,13 @@
  *
 
     Applied a Median Filter before the conversion from BGR to HSV for noise reduction
-    Removed the shape track bar
+    Improved contours and bounding boxes
+    Will only draw contours and bounding boxes with the largest area
+    Bounding boxes now have text indicating the shape, currently only have Rectangle and Circle
+    Contours are improved, using RETR_EXTERNAL instead of RETR_CCOMP
+    Removed the Object Detection control window as well as its elements
+    Removed the shape track bar, now only using crosses
+    Removed canny
 
  */
 
@@ -14,7 +20,7 @@ using namespace cv;
 using namespace std;
 
 //Globals
-Mat srcGray, dst, detectedEdges, imgOriginal, imgThresholded;
+Mat srcGray, dst, detectedEdges, imgOriginal, imgThresholded, imgHSV;
 vector<vector<Point>> contours;
 
 //Variables that contain values for the control window
@@ -44,51 +50,43 @@ struct ControlElements{
     int sY = 0;
     int sMax = 10;
 
-    //How many passes
+    //How many Morphological passes
     int passVal = 0;
-
-    //Shapes
-    //int shapes = 0;
-
-    //Canny thresholds
-    int edgeThresh = 1;
-    int lowThresh;
-    int const max_lowThresh = 100;
-    int ratio = 3;
-    int kSizeX = 1;
-    int kSizeY = 1;
-
-    //Object detection
-    int minSize = 0; //Minimum size of rect to draw (Area)
-    int minRadius = 0; //Minimum radius to draw
 
 };
 
 //Color structure
 struct Color{
 
+    //B, G, R
     Scalar RED = Scalar(0, 0, 255);
     Scalar GREEN = Scalar(0, 255, 0);
     Scalar BLUE = Scalar(255, 0 ,0);
     Scalar WHITE = Scalar(255, 255, 255);
-    Scalar Yellow = Scalar(255, 255, 0);
+    Scalar YELLOW = Scalar(0, 215, 255);
+    Scalar ORANGE = Scalar(0, 165, 255);
 
 };
 
 //createControl() uses ControlElements structure, initialize e before createControl()
 ControlElements e;
+Color color;
 
-//Canny thresholding function
-void cannyThresh(int, void*);
+//Creates all control windows
+void createControl();
 
-void createControl();//Creates the control window
-void drawBounding(); //Draws bounding boxes and circles for contours
+//Draws largest contours and bounding boxes
+void drawLargest();
+
+//Draws the bounding boxes for contours
+void drawBounding(int i);
 
 int main(int argc, char* argv[])
 {
-    VideoCapture cap(0); // open the video camera no. 0
+    //Open video camera no. 0
+    VideoCapture cap(0);
 
-    if (!cap.isOpened())  // if not success, exit program
+    if (!cap.isOpened())
     {
         cout << "Cannot open the video cam" << endl;
         return -1;
@@ -103,22 +101,18 @@ int main(int argc, char* argv[])
         //Read a video stream from a webcam and store it in imgOriginal
         bool bSuccess = cap.read(imgOriginal);
 
-        if (!bSuccess) //if not success, break loop
+        //Break loop if unsuccessful
+        if (!bSuccess)
         {
             cout << "Cannot read a frame from video stream" << endl;
             break;
         }
-
-        Mat imgHSV;
 
         //Median filter to reduce noise before converting to HSV
         medianBlur(imgOriginal, imgOriginal, 3);
 
         //Convert frame from BGR to HSV
         cvtColor(imgOriginal, imgHSV, COLOR_BGR2HSV);
-
-        //Apply a blur to HSV
-        blur(imgHSV, imgHSV, Size(3, 3));
 
         //Threshold the image
         inRange(imgHSV, Scalar(e.iLowH, e.iLowS, e.iLowV), Scalar(e.iHighH, e.iHighS, e.iHighV), imgThresholded);
@@ -139,7 +133,7 @@ int main(int argc, char* argv[])
         MorphShapes shape = MORPH_CROSS;
 
         //Clone imgThresholded into threshClone
-        Mat threshClone = imgThresholded.clone();
+        Mat threshClone(imgThresholded.clone());
 
         //Apply a Gaussian Blur to Thresholded image
         GaussianBlur(imgThresholded, imgThresholded, Size(e.kX, e.kY), e.sX, e.sY);
@@ -158,21 +152,16 @@ int main(int argc, char* argv[])
         //Convert imgOriginal to gray scale and output to srcGray
         cvtColor(imgOriginal, srcGray, CV_BGR2GRAY);
 
-        //cannyThresh(0,0);
-
         //Find contours
-        findContours(threshClone, contours, RETR_CCOMP, CHAIN_APPROX_SIMPLE);
+        findContours(threshClone, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
 
-        //Draw contours
-        drawContours(imgOriginal, contours, -1, Scalar(0, 255, 0), 2);
-
-        //Draw a bounding box on contours
-        drawBounding();
+        //Draw largest contours and bounding boxes
+        drawLargest();
 
         //Show the capture stream
-        imshow("Thresholded Image", imgThresholded); //Show the thresholded image
-        imshow("Contours", imgOriginal); //Show contours and bounding boxes
-        //imshow("HSV", imgHSV); //Show HSV
+        imshow("Thresholded Image", imgThresholded);
+        imshow("Contours", imgOriginal);
+        //imshow("HSV", imgHSV);
 
         if (waitKey(30) == 27) //wait for 'esc' key press for 30ms. If 'esc' key is pressed, break loop
         {
@@ -215,80 +204,58 @@ void createControl(){
     // Number of passes for Morphological Operators, Opening and Closing
     cvCreateTrackbar("Passes", "Control", &e.passVal, 10);
 
-    //Canny Window
-    //namedWindow("Edge Controller", CV_WINDOW_AUTOSIZE);
-
-    //Canny Track bars
-    //Threshold
-    //cvCreateTrackbar("Low Thresh", "Edge Controller", &e.lowThresh, e.max_lowThresh);
-
     //Blur
     cvCreateTrackbar("Kernel X", "Edge Controller", &e.kSizeX, 100);
     cvCreateTrackbar("Kernel Y", "Edge Controller", &e.kSizeY, 100);
 
-    //Shape detection
-    namedWindow("Object Detection", CV_WINDOW_AUTOSIZE);
-
-    //Minimum size
-    cvCreateTrackbar("Min Size", "Object Detection", &e.minSize, 10000);
-    cvCreateTrackbar("Min Radius", "Object Detection", &e.minRadius, 400);
 }
 
-void drawBounding(){
+void drawLargest(){
 
-    for(int i = 0; i < contours.size(); ++i)
-    {
-        Point2f points[4];
-        Point2f center;
-        float radius;
-        Rect rect;
-        RotatedRect rotate_rect;
+    int largestArea(10000);
+    for(int i = 0; i < contours.size(); i++){
 
-        //compute the bounding rect, rotated bounding rect, minimum enclosing circle.
-        rect = boundingRect(contours[i]);
-        rotate_rect = minAreaRect(contours[i]);
-        minEnclosingCircle(contours[i], center, radius);
+        double area = contourArea((contours[i]), false);
+        if(area > largestArea){
 
-        rotate_rect.points(points);
-
-        vector< vector<Point> > polylines;
-        polylines.resize(1);
-        for(int j = 0; j < 4; ++j)
-            polylines[0].push_back(points[j]);
-
-        //draw them on the bounding image.
-
-        if(rect.area() >= e.minSize){
-
-            //cv::rectangle(imgOriginal, rect, Scalar(0,255,255), 2);
-            cv::polylines(imgOriginal, polylines, true, Scalar(255, 0, 0), 2);
-        }
-
-        if(radius >= e.minRadius){
-
-            circle(imgOriginal, center, radius, Scalar(0, 0, 255), 2);
+            drawContours(imgOriginal, contours, i, color.GREEN, 2);
+            drawBounding(i);
         }
     }
 }
 
-void cannyThresh(int, void*){
+void drawBounding(int i){
 
-    //Error checking --Kernel sizes cannot be 0
-    if(e.kSizeX <= 0)
-        e.kSizeX = 1;
-    if(e.kSizeY <= 0)
-        e.kSizeY = 1;
+    Point2f points[4];
+    Point2f center;
+    float radius;
+    Rect rect;
+    RotatedRect rotate_rect;
 
-    //Noise reduction with a size ExE kernel
-    blur(srcGray, detectedEdges, Size(e.kSizeX, e.kSizeY));
+    //Compute the bounding rect, rotated bounding rect, minimum enclosing circle
+    rect = boundingRect(contours[i]);
+    rotate_rect = minAreaRect(contours[i]);
+    minEnclosingCircle(contours[i], center, radius);
 
-    //Canny detector
-    Canny(detectedEdges, detectedEdges, e.lowThresh, e.lowThresh * e.ratio, 3);
+    rotate_rect.points(points);
 
-    //Output as a mask
-    dst = Scalar::all(0);
+    vector<vector<Point> > polylines;
+    polylines.resize(1);
+    for (int j = 0; j < 4; ++j)
+        polylines[0].push_back(points[j]);
 
-    imgThresholded.copyTo(dst, detectedEdges);
-    imshow("Canny", dst);
+    //Draw them on the bounding image
+    if (rect.area() >= contourArea(contours[i])) {
 
+        putText(imgOriginal, "Rectangle", Point(rect.x + rect.width / 2, rect.y + rect.height / 2),
+                FONT_HERSHEY_SIMPLEX, .5, color.RED);
+        //cv::rectangle(imgOriginal, rect, Scalar(0,255,255), 2);
+        cv::polylines(imgOriginal, polylines, true, color.BLUE, 2);
+    }
+    if (radius >= contourArea(contours[i])) {
+
+        putText(imgOriginal, "Circle", Point(rect.x + rect.width / 2, rect.y + rect.height / 2),
+                FONT_HERSHEY_SIMPLEX, .5, color.RED);
+        circle(imgOriginal, center, radius, color.RED, 2);
+    }
 }
