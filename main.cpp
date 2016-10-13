@@ -1,14 +1,15 @@
 /* Change Log
  *
 
-    Applied a Median Filter before the conversion from BGR to HSV for noise reduction
-    Improved contours and bounding boxes
-    Will only draw contours and bounding boxes with the largest area
-    Bounding boxes now have text indicating the shape, currently only have Rectangle and Circle
-    Contours are improved, using RETR_EXTERNAL instead of RETR_CCOMP
-    Removed the Object Detection control window as well as its elements
-    Removed the shape track bar, now only using crosses
-    Removed canny
+   Function drawLargest() optimized for better performance
+   Function drawBounding now takes in 3 parameters
+   Cleaned up a lot of useless variables and optimized ControlElements structure
+
+   @TODO
+   Create separate functions or classes that will:
+   + Threshold and contour one color at a time
+        - Find threshold for Red, Green, Blue, etc, separately
+   + Output the threshold and contour results all into one window
 
  */
 
@@ -20,8 +21,8 @@ using namespace cv;
 using namespace std;
 
 //Globals
-Mat srcGray, dst, detectedEdges, imgOriginal, imgThresholded, imgHSV;
-vector<vector<Point>> contours;
+Mat imgOriginal, imgThresholded, imgHSV;
+vector<vector<Point>> cont;
 
 //Variables that contain values for the control window
 struct ControlElements{
@@ -65,6 +66,7 @@ struct Color{
     Scalar WHITE = Scalar(255, 255, 255);
     Scalar YELLOW = Scalar(0, 215, 255);
     Scalar ORANGE = Scalar(0, 165, 255);
+    Scalar BLACK = Scalar(0, 0, 0);
 
 };
 
@@ -79,7 +81,7 @@ void createControl();
 void drawLargest();
 
 //Draws the bounding boxes for contours
-void drawBounding(int i);
+void drawBounding(int i, vector<vector<Point>> contours, Scalar c);
 
 int main(int argc, char* argv[])
 {
@@ -146,14 +148,8 @@ int main(int argc, char* argv[])
         dilate( imgThresholded, imgThresholded, getStructuringElement(shape, Size(e.sizeX, e.sizeY)), Point(-1, -1), e.passVal);
         erode(imgThresholded, imgThresholded, getStructuringElement(shape, Size(e.sizeX, e.sizeY)), Point(-1, -1), e.passVal);
 
-        //Create a matrix of the same size and type as imgOriginal
-        dst.create(imgOriginal.size(), imgOriginal.type());
-
-        //Convert imgOriginal to gray scale and output to srcGray
-        cvtColor(imgOriginal, srcGray, CV_BGR2GRAY);
-
         //Find contours
-        findContours(threshClone, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
+        findContours(threshClone, cont, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
 
         //Draw largest contours and bounding boxes
         drawLargest();
@@ -209,18 +205,18 @@ void createControl(){
 void drawLargest(){
 
     int largestArea(10000);
-    for(int i = 0; i < contours.size(); i++){
+    for(int i = 0; i < cont.size(); i++){
 
-        double area = contourArea((contours[i]), false);
+        double area = contourArea((cont[i]), false);
         if(area > largestArea){
 
-            drawContours(imgOriginal, contours, i, color.GREEN, 2);
-            drawBounding(i);
+            drawContours(imgOriginal, cont, i, color.GREEN, 2);
+            drawBounding(i, cont, color.BLUE);
         }
     }
 }
 
-void drawBounding(int i){
+void drawBounding(int i, vector<vector<Point>> contours, Scalar c){
 
     Point2f points[4];
     Point2f center;
@@ -235,6 +231,9 @@ void drawBounding(int i){
 
     rotate_rect.points(points);
 
+    double rectCenterX = rect.x + rect.width / 2;
+    double rectCenterY = rect.y + rect.height / 2;
+
     vector<vector<Point> > polylines;
     polylines.resize(1);
     for (int j = 0; j < 4; ++j)
@@ -243,15 +242,16 @@ void drawBounding(int i){
     //Draw them on the bounding image
     if (rect.area() >= contourArea(contours[i])) {
 
-        putText(imgOriginal, "Rectangle", Point(rect.x + rect.width / 2, rect.y + rect.height / 2),
-                FONT_HERSHEY_SIMPLEX, .5, color.RED);
+        circle(imgOriginal, Point(rectCenterX, rectCenterY), 5, color.WHITE, 2);
+        putText(imgOriginal, "Rectangle", Point(rectCenterX, rectCenterY),
+                FONT_HERSHEY_SIMPLEX, .5, color.BLACK, 2);
         //cv::rectangle(imgOriginal, rect, Scalar(0,255,255), 2);
-        cv::polylines(imgOriginal, polylines, true, color.BLUE, 2);
+        cv::polylines(imgOriginal, polylines, true, c, 2);
     }
     if (radius >= contourArea(contours[i])) {
 
-        putText(imgOriginal, "Circle", Point(rect.x + rect.width / 2, rect.y + rect.height / 2),
-                FONT_HERSHEY_SIMPLEX, .5, color.RED);
-        circle(imgOriginal, center, radius, color.RED, 2);
+        putText(imgOriginal, "Circle", Point(rectCenterX, rectCenterY),
+                FONT_HERSHEY_SIMPLEX, .5, color.BLACK, 2);
+        circle(imgOriginal, center, radius, c, 2);
     }
 }
