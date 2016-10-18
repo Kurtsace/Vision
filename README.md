@@ -3,6 +3,26 @@ Vision using OpenCV
 
 Change Log
 
+October 18, 2016 
+
+   Added shape recognition (only can detect rectangles as of now)
+   New functions:
+        + getFocalLength() , will get the focal length of the camera according to rectWidth
+        + distanceToObject() , will find the distance of the object depending on the focal length
+        and the rectWidth
+            - returned value is in inches
+    Draws the distance measured in the drawBounding() method --only for rectangles as of now
+
+
+   @TODO
+   Transition and implement everything into object orientation
+   Main.cpp will only be used for creating objects and running them
+   Create separate functions in a class that will:
+   + Threshold and contour one color at a time
+        - Find threshold for Red, Green, Blue, etc, separately
+   + Output the threshold and contour results all into one window
+   Clean up functions for better readability and optimization
+
 October 17, 2016 
 
 	@TODO

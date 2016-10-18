@@ -1,16 +1,5 @@
 /* Change Log
  *
-
-   Function drawLargest() optimized for better performance
-   Function drawBounding now takes in 3 parameters
-   Cleaned up a lot of useless variables and optimized ControlElements structure
-
-   @TODO
-   Create separate functions or classes that will:
-   + Threshold and contour one color at a time
-        - Find threshold for Red, Green, Blue, etc, separately
-   + Output the threshold and contour results all into one window
-
  */
 
 #include "opencv2/highgui/highgui.hpp"
@@ -23,23 +12,24 @@ using namespace std;
 //Globals
 Mat imgOriginal, imgThresholded, imgHSV;
 vector<vector<Point>> cont;
+vector<Point> contPoly;
 
 //Variables that contain values for the control window
 struct ControlElements{
 
     //Hue, Saturation, Value
-    int iLowH = 0;
+    int iLowH = 162;
     int iHighH = 179;
 
-    int iLowS = 0;
+    int iLowS = 50;
     int iHighS = 255;
 
-    int iLowV = 0;
+    int iLowV = 40;
     int iHighV = 255;
 
     //Size of the Morphological Shape
-    int sizeX = 0;
-    int sizeY = 0;
+    int sizeX = 3;
+    int sizeY = 3;
 
     //Kernel size for Gaussian Blur
     int kX = 1;
@@ -52,7 +42,7 @@ struct ControlElements{
     int sMax = 10;
 
     //How many Morphological passes
-    int passVal = 0;
+    int passVal = 2;
 
 };
 
@@ -77,11 +67,19 @@ Color color;
 //Creates all control windows
 void createControl();
 
+void drawThresh();
+
 //Draws largest contours and bounding boxes
-void drawLargest();
+void drawLargest(Scalar color);
 
 //Draws the bounding boxes for contours
 void drawBounding(int i, vector<vector<Point>> contours, Scalar c);
+
+//Return the focal length in inches
+double getFocalLength(int width);
+
+//Return the distance of the object from the camera
+double distanceToObject(int focalLength, double width);
 
 int main(int argc, char* argv[])
 {
@@ -113,46 +111,8 @@ int main(int argc, char* argv[])
         //Median filter to reduce noise before converting to HSV
         medianBlur(imgOriginal, imgOriginal, 3);
 
-        //Convert frame from BGR to HSV
-        cvtColor(imgOriginal, imgHSV, COLOR_BGR2HSV);
-
-        //Threshold the image
-        inRange(imgHSV, Scalar(e.iLowH, e.iLowS, e.iLowV), Scalar(e.iHighH, e.iHighS, e.iHighV), imgThresholded);
-
-        //Kernel cannot be an even value
-        if( e.kX % 2 == 0 && e.kX <= e.kMax)
-            e.kX++;
-        if( e.kY % 2 == 0 && e.kY <= e.kMax)
-            e.kY++;
-
-        //Size of the shape cannot be 0
-        if(e.sizeX <= 0)
-            e.sizeX = 1;
-        if(e.sizeY <= 0)
-            e.sizeY = 1;
-
-        //Change shapes
-        MorphShapes shape = MORPH_CROSS;
-
-        //Clone imgThresholded into threshClone
-        Mat threshClone(imgThresholded.clone());
-
-        //Apply a Gaussian Blur to Thresholded image
-        GaussianBlur(imgThresholded, imgThresholded, Size(e.kX, e.kY), e.sX, e.sY);
-
-        //morphological opening (remove small objects from the foreground)
-        erode(imgThresholded, imgThresholded, getStructuringElement(shape, Size(e.sizeX, e.sizeY)), Point(-1, -1) , e.passVal);
-        dilate( imgThresholded, imgThresholded, getStructuringElement(shape, Size(e.sizeX, e.sizeY)), Point(-1, -1), e.passVal);
-
-        //morphological closing (fill small holes in the foreground)
-        dilate( imgThresholded, imgThresholded, getStructuringElement(shape, Size(e.sizeX, e.sizeY)), Point(-1, -1), e.passVal);
-        erode(imgThresholded, imgThresholded, getStructuringElement(shape, Size(e.sizeX, e.sizeY)), Point(-1, -1), e.passVal);
-
-        //Find contours
-        findContours(threshClone, cont, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
-
-        //Draw largest contours and bounding boxes
-        drawLargest();
+        //Draw the thresholded image with contours
+        drawThresh();
 
         //Show the capture stream
         imshow("Thresholded Image", imgThresholded);
@@ -167,6 +127,139 @@ int main(int argc, char* argv[])
     }
 
     return 0;
+}
+
+void drawThresh(){
+
+    //Convert frame from BGR to HSV
+    cvtColor(imgOriginal, imgHSV, COLOR_BGR2HSV);
+
+    //Threshold the image
+    inRange(imgHSV, Scalar(e.iLowH, e.iLowS, e.iLowV), Scalar(e.iHighH, e.iHighS, e.iHighV), imgThresholded);
+
+    //Kernel cannot be an even value
+    if( e.kX % 2 == 0 && e.kX <= e.kMax)
+        e.kX++;
+    if( e.kY % 2 == 0 && e.kY <= e.kMax)
+        e.kY++;
+
+    //Size of the shape cannot be 0
+    if(e.sizeX <= 0)
+        e.sizeX = 1;
+    if(e.sizeY <= 0)
+        e.sizeY = 1;
+
+    //Change shapes
+    MorphShapes shape = MORPH_CROSS;
+
+    //Clone imgThresholded into threshClone
+    Mat threshClone(imgThresholded.clone());
+
+    //Apply a Gaussian Blur to Thresholded image
+    GaussianBlur(imgThresholded, imgThresholded, Size(e.kX, e.kY), e.sX, e.sY);
+
+    //morphological opening (remove small objects from the foreground)
+    erode(imgThresholded, imgThresholded, getStructuringElement(shape, Size(e.sizeX, e.sizeY)), Point(-1, -1) , e.passVal);
+    dilate( imgThresholded, imgThresholded, getStructuringElement(shape, Size(e.sizeX, e.sizeY)), Point(-1, -1), e.passVal);
+
+    //morphological closing (fill small holes in the foreground)
+    dilate( imgThresholded, imgThresholded, getStructuringElement(shape, Size(e.sizeX, e.sizeY)), Point(-1, -1), e.passVal);
+    erode(imgThresholded, imgThresholded, getStructuringElement(shape, Size(e.sizeX, e.sizeY)), Point(-1, -1), e.passVal);
+
+    //Find contours
+    findContours(threshClone, cont, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
+
+    //Draw largest contours and bounding boxes
+    drawLargest(color.RED);
+
+}
+
+void drawLargest(Scalar color) {
+
+    //Determine the largest contour area to draw
+    double largestArea = 0;
+    int largestIndex = 0;
+
+    for (int i = 0; i < cont.size(); i++) {
+
+        double area = contourArea(cont[i]);
+
+        if (area > largestArea) {
+            largestArea = area;
+            largestIndex = i;
+        }
+    }
+
+    drawContours(imgOriginal, cont, largestIndex, color, 2);
+    drawBounding(largestIndex, cont, color);
+}
+
+void drawBounding(int i, vector<vector<Point>> contours, Scalar c){
+
+    Point2f points[4];
+    Point2f center;
+    float radius;
+    Rect rect;
+    RotatedRect rotate_rect;
+
+    //Calculate polygon approximation
+    approxPolyDP(Mat(contours[i]), contPoly, arcLength(contours[i], true) * 0.01, true);
+
+    //Compute the bounding rect, rotated bounding rect, minimum enclosing circle
+    rect = boundingRect(contours[i]);
+    rotate_rect = minAreaRect(contours[i]);
+    minEnclosingCircle(contours[i], center, radius);
+
+    rotate_rect.points(points);
+
+    //Calculate center points of rectangle
+    double rectCenterX = rect.x + rect.width / 2;
+    double rectCenterY = rect.y + rect.height / 2;
+
+    //Calculate width of rectangle
+    int rectWidth = rect.br().x - rect.tl().x;
+
+    //Get distance to object from camera
+    //cout << getFocalLength(rectWidth) << endl;
+    double dist = distanceToObject(570, rectWidth);
+
+    vector<vector<Point>> polylines;
+    polylines.resize(1);
+    for (int j = 0; j < 4; ++j)
+        polylines[0].push_back(points[j]);
+
+    string distString = to_string(dist) + " IN.";
+
+    //Check to see if its a shape
+    bool isRect = contPoly.size() >= 4 && contPoly.size() <= 6;
+
+    //Draw them on the bounding image
+    if (isRect) {
+
+        circle(imgOriginal, Point(rectCenterX, rectCenterY), 5, color.WHITE, 2);
+        putText(imgOriginal, "Rectangle", Point(rectCenterX + 10, rectCenterY),
+                FONT_HERSHEY_SIMPLEX, .5, color.BLACK, 2);
+        putText(imgOriginal, distString, Point(rectCenterX + 10, rectCenterY + 20),
+                FONT_HERSHEY_SIMPLEX, .40, color.BLACK, 1.5);
+        //cv::rectangle(imgOriginal, rect, Scalar(0,255,255), 2);
+        cv::polylines(imgOriginal, polylines, true, c, 2);
+    }
+    if (radius >= 100000) {
+
+        putText(imgOriginal, "Circle", Point(rectCenterX, rectCenterY),
+                FONT_HERSHEY_SIMPLEX, .5, color.BLACK, 2);
+        circle(imgOriginal, center, radius, c, 2);
+    }
+}
+
+double getFocalLength(int width){
+
+    return (width * 10.5) / 3.5;
+}
+
+double distanceToObject(int focalLength, double width) {
+
+    return (3.5 * focalLength) / width;
 }
 
 void createControl(){
@@ -200,58 +293,4 @@ void createControl(){
     // Number of passes for Morphological Operators, Opening and Closing
     cvCreateTrackbar("Passes", "Control", &e.passVal, 10);
 
-}
-
-void drawLargest(){
-
-    int largestArea(10000);
-    for(int i = 0; i < cont.size(); i++){
-
-        double area = contourArea((cont[i]), false);
-        if(area > largestArea){
-
-            drawContours(imgOriginal, cont, i, color.GREEN, 2);
-            drawBounding(i, cont, color.BLUE);
-        }
-    }
-}
-
-void drawBounding(int i, vector<vector<Point>> contours, Scalar c){
-
-    Point2f points[4];
-    Point2f center;
-    float radius;
-    Rect rect;
-    RotatedRect rotate_rect;
-
-    //Compute the bounding rect, rotated bounding rect, minimum enclosing circle
-    rect = boundingRect(contours[i]);
-    rotate_rect = minAreaRect(contours[i]);
-    minEnclosingCircle(contours[i], center, radius);
-
-    rotate_rect.points(points);
-
-    double rectCenterX = rect.x + rect.width / 2;
-    double rectCenterY = rect.y + rect.height / 2;
-
-    vector<vector<Point> > polylines;
-    polylines.resize(1);
-    for (int j = 0; j < 4; ++j)
-        polylines[0].push_back(points[j]);
-
-    //Draw them on the bounding image
-    if (rect.area() >= contourArea(contours[i])) {
-
-        circle(imgOriginal, Point(rectCenterX, rectCenterY), 5, color.WHITE, 2);
-        putText(imgOriginal, "Rectangle", Point(rectCenterX, rectCenterY),
-                FONT_HERSHEY_SIMPLEX, .5, color.BLACK, 2);
-        //cv::rectangle(imgOriginal, rect, Scalar(0,255,255), 2);
-        cv::polylines(imgOriginal, polylines, true, c, 2);
-    }
-    if (radius >= contourArea(contours[i])) {
-
-        putText(imgOriginal, "Circle", Point(rectCenterX, rectCenterY),
-                FONT_HERSHEY_SIMPLEX, .5, color.BLACK, 2);
-        circle(imgOriginal, center, radius, c, 2);
-    }
 }
