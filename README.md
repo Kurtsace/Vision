@@ -15,6 +15,7 @@ October 18, 2016
 
 
    	@TODO
+	Improve distanceToObject, one or two major bugs affecting its calculated distance
    	Transition and implement everything into object orientation
    	Main.cpp will only be used for creating objects and running them
    	Create separate functions in a class that will:
