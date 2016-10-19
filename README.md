@@ -3,6 +3,29 @@ Vision using OpenCV
 
 Change Log
 
+October 19, 2016
+
+        Finalized most of the functions, they will no longer need optimizing or editing 
+        Making slight improvements to remaining functions and algorithms 
+        Cleaned up almost everything, structures, functions, variables 
+    
+       @TODO 
+        Finish finalizing all other functions and algorithms 
+        Make improvements for vertice detection (shape recognition) 
+        Improve track bar usability
+        Finalize all algorithms
+        Check for more bugs 
+    
+       *Note 
+        After everything is finalized I will be abandoning this main.cpp file 
+        and moving it all into object orientation for easier use and optimal 
+        readability 
+     
+        I will be regularly updating this file but mostly will be working on 
+        the object orientation. 
+     
+	This file will be good enough to use after the next update or so.
+
 October 18, 2016 
 
    	Added shape recognition (only can detect rectangles as of now)

@@ -6,6 +6,8 @@
 #include "opencv2/imgproc/imgproc.hpp"
 #include <iostream>
 
+#include "Threshold.h"
+
 using namespace cv;
 using namespace std;
 
@@ -32,13 +34,13 @@ struct ControlElements{
     int sizeY = 3;
 
     //Kernel size for Gaussian Blur
-    int kX = 1;
-    int kY = 1;
+    int kX = 5;
+    int kY = 5;
     int kMax = 31;
 
     //Sigma for Gaussian blur
-    int sX = 0;
-    int sY = 0;
+    int sX = 3;
+    int sY = 3;
     int sMax = 10;
 
     //How many Morphological passes
@@ -70,13 +72,13 @@ void createControl();
 void drawThresh();
 
 //Draws largest contours and bounding boxes
-void drawLargest(Scalar color);
+void findLargest(Scalar color);
 
 //Draws the bounding boxes for contours
 void drawBounding(int i, vector<vector<Point>> contours, Scalar c);
 
 //Return the focal length in inches
-double getFocalLength(int width);
+int getFocalLength(int pxWidth, int distance, double realWidth);
 
 //Return the distance of the object from the camera
 double distanceToObject(int focalLength, double width);
@@ -115,7 +117,10 @@ int main(int argc, char* argv[])
         drawThresh();
 
         //Show the capture stream
-        imshow("Thresholded Image", imgThresholded);
+        namedWindow("Threshold", WINDOW_NORMAL);
+        resizeWindow("Threshold", 480, 360);
+        moveWindow("Threshold", 800, 200);
+        imshow("Threshold", imgThresholded);
         imshow("Contours", imgOriginal);
         //imshow("HSV", imgHSV);
 
@@ -169,16 +174,16 @@ void drawThresh(){
     //Find contours
     findContours(threshClone, cont, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
 
-    //Draw largest contours and bounding boxes
-    drawLargest(color.RED);
+    //find largest contours and then draw contours with bounding boxes
+    findLargest(color.RED);
 
 }
 
-void drawLargest(Scalar color) {
+void findLargest(Scalar color) {
 
     //Determine the largest contour area to draw
-    double largestArea = 0;
-    int largestIndex = 0;
+    double largestArea = 1;
+    int largestIndex = -1;
 
     for (int i = 0; i < cont.size(); i++) {
 
@@ -190,8 +195,10 @@ void drawLargest(Scalar color) {
         }
     }
 
-    drawContours(imgOriginal, cont, largestIndex, color, 2);
-    drawBounding(largestIndex, cont, color);
+    if(largestIndex != -1){
+
+        drawBounding(largestIndex, cont, color);
+    }
 }
 
 void drawBounding(int i, vector<vector<Point>> contours, Scalar c){
@@ -212,30 +219,37 @@ void drawBounding(int i, vector<vector<Point>> contours, Scalar c){
 
     rotate_rect.points(points);
 
+    //Calculate rectangle width
+    double rectWidth = rect.br().x - rect.tl().x;
+
+    //Calculate focal length and the distance of the object
+    //cout << getFocalLength(rectWidth, 10, 3.5) << endl;
+    double distance;
+
     //Calculate center points of rectangle
     double rectCenterX = rect.x + rect.width / 2;
     double rectCenterY = rect.y + rect.height / 2;
-
-    //Calculate width of rectangle
-    int rectWidth = rect.br().x - rect.tl().x;
-
-    //Get distance to object from camera
-    //cout << getFocalLength(rectWidth) << endl;
-    double dist = distanceToObject(570, rectWidth);
 
     vector<vector<Point>> polylines;
     polylines.resize(1);
     for (int j = 0; j < 4; ++j)
         polylines[0].push_back(points[j]);
 
-    string distString = to_string(dist) + " IN.";
+    string distString;
 
-    //Check to see if its a shape
-    bool isRect = contPoly.size() >= 4 && contPoly.size() <= 6;
+    //cout << rectWidth << endl;
 
-    //Draw them on the bounding image
+    //Check to see what shape it is
+    bool isRect = contPoly.size() >= 4 && contPoly.size() <= 7;
+    bool isCircle = contPoly.size() >= 8 && contPoly.size() <= 12;
+    bool isTri = contPoly.size() == 3;
+
+    //Draw correct bounding shapes and contours
     if (isRect) {
 
+        distance = distanceToObject(560, rectWidth);
+        distString = to_string(distance) + " IN.";
+        drawContours(imgOriginal, cont, i, c, 2);
         circle(imgOriginal, Point(rectCenterX, rectCenterY), 5, color.WHITE, 2);
         putText(imgOriginal, "Rectangle", Point(rectCenterX + 10, rectCenterY),
                 FONT_HERSHEY_SIMPLEX, .5, color.BLACK, 2);
@@ -243,18 +257,34 @@ void drawBounding(int i, vector<vector<Point>> contours, Scalar c){
                 FONT_HERSHEY_SIMPLEX, .40, color.BLACK, 1.5);
         //cv::rectangle(imgOriginal, rect, Scalar(0,255,255), 2);
         cv::polylines(imgOriginal, polylines, true, c, 2);
-    }
-    if (radius >= 100000) {
 
+    } else if (isCircle) {
+
+        distance = distanceToObject(560, radius * 2);
+        distString = to_string(distance) + " IN.";
+        drawContours(imgOriginal, cont, i, c, 2);
+        circle(imgOriginal, Point(rectCenterX, rectCenterY), 5, color.WHITE, 2);
         putText(imgOriginal, "Circle", Point(rectCenterX, rectCenterY),
                 FONT_HERSHEY_SIMPLEX, .5, color.BLACK, 2);
+        putText(imgOriginal, distString, Point(rectCenterX + 10, rectCenterY + 20),
+                FONT_HERSHEY_SIMPLEX, .40, color.BLACK, 1.5);
         circle(imgOriginal, center, radius, c, 2);
+
+    } else if(isTri) {
+
+        drawContours(imgOriginal, cont, i, c, 2);
+        circle(imgOriginal, Point(rectCenterX, rectCenterY), 5, color.WHITE, 2);
+        putText(imgOriginal, distString, Point(rectCenterX + 10, rectCenterY + 20),
+                FONT_HERSHEY_SIMPLEX, .40, color.BLACK, 1.5);
+        putText(imgOriginal, "Triangle", Point(rectCenterX, rectCenterY),
+                FONT_HERSHEY_SIMPLEX, .5, color.BLACK, 2);
     }
+
 }
 
-double getFocalLength(int width){
+int getFocalLength(int pxWidth, int distance, double realWidth){
 
-    return (width * 10.5) / 3.5;
+    return (pxWidth * distance) / realWidth;
 }
 
 double distanceToObject(int focalLength, double width) {
