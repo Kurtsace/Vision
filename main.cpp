@@ -6,8 +6,6 @@
 #include "opencv2/imgproc/imgproc.hpp"
 #include <iostream>
 
-#include "Threshold.h"
-
 using namespace cv;
 using namespace std;
 
@@ -85,6 +83,7 @@ double distanceToObject(int focalLength, double width);
 
 int main(int argc, char* argv[])
 {
+
     //Open video camera no. 0
     VideoCapture cap(0);
 
@@ -100,7 +99,7 @@ int main(int argc, char* argv[])
     while (1)
     {
 
-        //Read a video stream from a webcam and store it in imgOriginal
+        //Read a video stream from a web cam and store it in imgOriginal
         bool bSuccess = cap.read(imgOriginal);
 
         //Break loop if unsuccessful
@@ -119,10 +118,9 @@ int main(int argc, char* argv[])
         //Show the capture stream
         namedWindow("Threshold", WINDOW_NORMAL);
         resizeWindow("Threshold", 480, 360);
-        moveWindow("Threshold", 800, 200);
         imshow("Threshold", imgThresholded);
         imshow("Contours", imgOriginal);
-        //imshow("HSV", imgHSV);
+        imshow("HSV", imgHSV);
 
         if (waitKey(30) == 27) //wait for 'esc' key press for 30ms. If 'esc' key is pressed, break loop
         {
@@ -223,7 +221,7 @@ void drawBounding(int i, vector<vector<Point>> contours, Scalar c){
     double rectWidth = rect.br().x - rect.tl().x;
 
     //Calculate focal length and the distance of the object
-    //cout << getFocalLength(rectWidth, 10, 3.5) << endl;
+    cout << getFocalLength(rectWidth, 10, 3.5) << endl;
     double distance;
 
     //Calculate center points of rectangle
@@ -237,17 +235,14 @@ void drawBounding(int i, vector<vector<Point>> contours, Scalar c){
 
     string distString;
 
-    //cout << rectWidth << endl;
-
     //Check to see what shape it is
     bool isRect = contPoly.size() >= 4 && contPoly.size() <= 7;
-    bool isCircle = contPoly.size() >= 8 && contPoly.size() <= 12;
-    bool isTri = contPoly.size() == 3;
+    bool isCircle = contPoly.size() >= 8 && contPoly.size() <= 18;
 
     //Draw correct bounding shapes and contours
     if (isRect) {
 
-        distance = distanceToObject(560, rectWidth);
+        distance = distanceToObject(570, rectWidth);
         distString = to_string(distance) + " IN.";
         drawContours(imgOriginal, cont, i, c, 2);
         circle(imgOriginal, Point(rectCenterX, rectCenterY), 5, color.WHITE, 2);
@@ -255,31 +250,30 @@ void drawBounding(int i, vector<vector<Point>> contours, Scalar c){
                 FONT_HERSHEY_SIMPLEX, .5, color.BLACK, 2);
         putText(imgOriginal, distString, Point(rectCenterX + 10, rectCenterY + 20),
                 FONT_HERSHEY_SIMPLEX, .40, color.BLACK, 1.5);
-        //cv::rectangle(imgOriginal, rect, Scalar(0,255,255), 2);
         cv::polylines(imgOriginal, polylines, true, c, 2);
 
     } else if (isCircle) {
 
-        distance = distanceToObject(560, radius * 2);
+        distance = distanceToObject(570, radius * 2);
         distString = to_string(distance) + " IN.";
         drawContours(imgOriginal, cont, i, c, 2);
         circle(imgOriginal, Point(rectCenterX, rectCenterY), 5, color.WHITE, 2);
-        putText(imgOriginal, "Circle", Point(rectCenterX, rectCenterY),
+        putText(imgOriginal,"Circle", Point(rectCenterX, rectCenterY),
                 FONT_HERSHEY_SIMPLEX, .5, color.BLACK, 2);
         putText(imgOriginal, distString, Point(rectCenterX + 10, rectCenterY + 20),
                 FONT_HERSHEY_SIMPLEX, .40, color.BLACK, 1.5);
         circle(imgOriginal, center, radius, c, 2);
 
-    } else if(isTri) {
+    } else {
 
-        drawContours(imgOriginal, cont, i, c, 2);
+        drawContours(imgOriginal, cont, i, color.WHITE, 2);
         circle(imgOriginal, Point(rectCenterX, rectCenterY), 5, color.WHITE, 2);
-        putText(imgOriginal, distString, Point(rectCenterX + 10, rectCenterY + 20),
-                FONT_HERSHEY_SIMPLEX, .40, color.BLACK, 1.5);
-        putText(imgOriginal, "Triangle", Point(rectCenterX, rectCenterY),
+        putText(imgOriginal, "UNDEFINED", Point(rectCenterX + 10, rectCenterY),
                 FONT_HERSHEY_SIMPLEX, .5, color.BLACK, 2);
+        putText(imgOriginal, "UNDEFINED", Point(rectCenterX + 10, rectCenterY + 20),
+                FONT_HERSHEY_SIMPLEX, .40, color.BLACK, 1.5);
+        cv::polylines(imgOriginal, polylines, true, color.BLACK, 2);
     }
-
 }
 
 int getFocalLength(int pxWidth, int distance, double realWidth){
@@ -289,7 +283,7 @@ int getFocalLength(int pxWidth, int distance, double realWidth){
 
 double distanceToObject(int focalLength, double width) {
 
-    return (3.5 * focalLength) / width;
+    return (focalLength * 3.5) / width;
 }
 
 void createControl(){

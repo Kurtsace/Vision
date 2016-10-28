@@ -3,6 +3,21 @@ Vision using OpenCV
 
 Change Log
 
+October 25, 2016
+	
+	All functions except focal and distance functions are final.
+	Still a few bugs with distance to object, innacuracy by ~5 inches the further away it is. 
+	Everything is functional and has no more bugs or errors. 
+	Drawing bounding boxes of certain sizes no longer crashes the program. 
+	Function largestArea() will no longer draw all contours if the minimum area requirement isnt met. 
+	Minor improvements to shape detection. 
+	Shape detection can only detect rectangles and circles 
+
+	@TODO
+	Improve distance estimation. 
+	Add more shapes to detect.
+	Improve approximation --IF POSSIBLE
+
 October 19, 2016
 
         Finalized most of the functions, they will no longer need optimizing or editing 
