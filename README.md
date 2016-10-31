@@ -3,6 +3,19 @@ Vision using OpenCV
 
 Change Log
 
+October 31, 2016 
+	
+	Old distance detection is still inaccurate. 
+	Shape detection needs slight improvements. 
+	Thresholding is very good but can use some slight improvements where needed.	
+
+	@TODO
+	Find an alternate algorithm for detecting the distance to object. 
+	Replace old circle detection to HoughCircles. 
+	Old shape detection needs improvements to be better at detecting shapes. 
+	Thresholding should be improved if possible for better accuracy. 
+	Noise reduction for better detection. 
+
 October 25, 2016
 	
 	All functions except focal and distance functions are final.
